@@ -592,6 +592,48 @@
         }
       }
     },
+    "S3Role" : {
+      "Type" : "AWS::IAM::Role",
+      "Properties" : {
+        "AssumeRolePolicyDocument" : {
+          "Version" : "2012-10-17",
+          "Statement" : [ {
+            "Effect" : "Allow",
+            "Principal" : {
+              "Service" : [ "ec2.amazonaws.com" ]
+            },
+            "Action" : [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path" : "/",
+        "Policies" : [ {
+          "PolicyName" : "swarms3",
+          "PolicyDocument" : {
+            "Version" : "2012-10-17",
+            "Statement" : [ {
+              "Effect" : "Allow",
+              "Action" : [
+                "s3:GetObject",
+                "s3:PutObject"
+              ],
+              "Resource" : [
+                "arn:aws:s3:::mojd-swarm-token-bucket",
+                "arn:aws:s3:::mojd-swarm-token-bucket/*"
+              ]
+            } ]
+          }
+        } ]
+      }
+    },
+    "SwarmS3InstanceProfile" : {
+      "Type" : "AWS::IAM::InstanceProfile",
+      "Properties" : {
+        "Path" : "/",
+        "Roles" : [ {
+          "Ref" : "S3Role"
+        } ]
+      }
+    },
     "InstanceSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
@@ -613,6 +655,7 @@
         "ImageId" : { "Ref" : "AMI" },
         "InstanceType" : { "Ref" : "InstanceSize" },
         "KeyName" : { "Ref" : "KeyName" },
+        "IamInstanceProfile" : { "Ref" : "SwarmS3InstanceProfile"},
         "Tags" : [
           {
             "Key" : "Name",
@@ -628,7 +671,17 @@
           "sudo apt-get update\n",
           "sudo apt-get purge lxc-docker\n",
           "sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual docker-engine\n",
-          "sudo service docker start\n"
+          "sudo docker ps || sudo service docker start\n",
+          "sudo docker swarm init\n",
+          "sudo apt-get install -y unzip\n",
+          "curl 'https://s3.amazonaws.com/aws-cli/awscli-bundle.zip' -o 'awscli-bundle.zip'\n",
+          "unzip awscli-bundle.zip\n",
+          "sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws\n",
+          "mkdir ${HOME}/.aws\n",
+          "echo '[default]' > ${HOME}/.aws/config\n",
+          "echo 'region = eu-west-1' >> ${HOME}/.aws/config\n",
+          "sudo docker swarm join-token worker -q > /tmp/worker-token\n",
+          "aws s3 cp /tmp/worker-token s3://mojd-swarm-token-bucket/\n"
         ]]}}, 
         "NetworkInterfaces" : [{
           "GroupSet" : [{ "Ref" : "InstanceSecurityGroup" }],
@@ -645,6 +698,7 @@
         "ImageId" : { "Ref" : "AMI" },
         "InstanceType" : { "Ref" : "InstanceSize" },
         "KeyName" : { "Ref" : "KeyName" },
+        "IamInstanceProfile" : { "Ref" : "SwarmS3InstanceProfile"},
         "Tags" : [
           {
             "Key" : "Name",
@@ -660,7 +714,16 @@
           "sudo apt-get update\n",
           "sudo apt-get purge lxc-docker\n",
           "sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual docker-engine\n",
-          "sudo service docker start\n"
+          "sudo docker ps || sudo service docker start\n",
+          "sudo apt-get install -y unzip\n",
+          "curl 'https://s3.amazonaws.com/aws-cli/awscli-bundle.zip' -o 'awscli-bundle.zip'\n",
+          "unzip awscli-bundle.zip\n",
+          "sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws\n",
+          "mkdir ${HOME}/.aws\n",
+          "echo '[default]' > ${HOME}/.aws/config\n",
+          "echo 'region = eu-west-1' >> ${HOME}/.aws/config\n",
+          "aws s3 cp s3://mojd-swarm-token-bucket/worker-token /tmp/worker-token\n",
+          "sudo docker swarm join --token $(cat /tmp/worker-token) ", { "Fn::GetAtt" : [ "Instance1", "PrivateIp" ] }, ":2377\n"
         ]]}}, 
         "NetworkInterfaces" : [{
           "GroupSet" : [{ "Ref" : "InstanceSecurityGroup" }],
@@ -677,6 +740,7 @@
         "ImageId" : { "Ref" : "AMI" },
         "InstanceType" : { "Ref" : "InstanceSize" },
         "KeyName" : { "Ref" : "KeyName" },
+        "IamInstanceProfile" : { "Ref" : "SwarmS3InstanceProfile"},
         "Tags" : [
           {
             "Key" : "Name",
@@ -692,7 +756,16 @@
           "sudo apt-get update\n",
           "sudo apt-get purge lxc-docker\n",
           "sudo apt-get install -y linux-image-extra-$(uname -r) linux-image-extra-virtual docker-engine\n",
-          "sudo service docker start\n"
+          "sudo docker ps || sudo service docker start\n",
+          "sudo apt-get install -y unzip\n",
+          "curl 'https://s3.amazonaws.com/aws-cli/awscli-bundle.zip' -o 'awscli-bundle.zip'\n",
+          "unzip awscli-bundle.zip\n",
+          "sudo ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws\n",
+          "mkdir ${HOME}/.aws\n",
+          "echo '[default]' > ${HOME}/.aws/config\n",
+          "echo 'region = eu-west-1' >> ${HOME}/.aws/config\n",
+          "aws s3 cp s3://mojd-swarm-token-bucket/worker-token /tmp/worker-token\n",
+          "sudo docker swarm join --token $(cat /tmp/worker-token) ", { "Fn::GetAtt" : [ "Instance1", "PrivateIp" ] }, ":2377\n"
         ]]}}, 
         "NetworkInterfaces" : [{
           "GroupSet" : [{ "Ref" : "InstanceSecurityGroup" }],
@@ -702,6 +775,14 @@
           "SubnetId" : { "Ref" : "Subnet3" }
         }]
       }
+  },
+  "SwarmTokenBucket" : {
+    "Type" : "AWS::S3::Bucket",
+    "DeletionPolicy" : "Retain",
+    "Properties" : {
+      "AccessControl" : "PublicReadWrite",
+      "BucketName" : "mojd-swarm-token-bucket"
+    }
   }
 
 },
